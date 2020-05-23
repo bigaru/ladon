@@ -1,6 +1,7 @@
 package `in`.abaddon.ladon
 
 import com.sun.source.tree.AssignmentTree
+import com.sun.source.tree.ClassTree
 import com.sun.source.tree.LiteralTree
 import com.sun.source.tree.UnaryTree
 import com.sun.source.util.JavacTask
@@ -20,6 +21,7 @@ import javax.lang.model.SourceVersion
 import javax.lang.model.element.TypeElement
 import javax.tools.Diagnostic
 
+data class InsideClass(val qualifiedName: String)
 
 @SupportedAnnotationTypes("in.abaddon.ladon.*")
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
@@ -75,7 +77,6 @@ class LadonProcessor : AbstractProcessor(){
 
             if(lhs is JCTree.JCFieldAccess){
                 val rhsValue = scan(rhs,p)
-                warn("> $rhsValue")
 
                 val className = lhs.expression.type.toString()
                 val varName = lhs.identifier.toString()
@@ -89,6 +90,26 @@ class LadonProcessor : AbstractProcessor(){
                 }
             }
 
+            if(lhs is JCTree.JCIdent && p is InsideClass){
+                val rhsValue = scan(rhs,p)
+
+                val varName = lhs.name.toString()
+                val pair = Pair(varName, p.qualifiedName)
+
+                val guard = elements[pair]
+                if(guard == null || rhsValue == null) return
+
+                if(!guard.isValid(rhsValue)) {
+                    error("$node ${guard.msg}")
+                }
+            }
+
+        }
+
+
+        override fun visitClass(node: ClassTree, p: Any?): Any? {
+            val classDecl = node as JCTree.JCClassDecl
+            return super.visitClass(node, InsideClass(classDecl.type.toString()))
         }
 
         override fun visitLiteral(node: LiteralTree, p: Any?): Any? {

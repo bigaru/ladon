@@ -35,7 +35,7 @@ public class Main {
         foo.positiveFloat = -+-34.0;
         foo.positiveFloat = +-+-34.0d;
 
-        // TODO Inside class
+        // DONE Inside class
         // positiveFloat = -34f;
     }
 

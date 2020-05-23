@@ -10,7 +10,7 @@ public class  Foo {
     int anyNumber = 4;
 
     void bar(){
-        positiveInt = -12;
+        positiveFloat = 14.0;
         this.positiveInt = 133;
     }
 }
