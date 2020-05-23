@@ -2,6 +2,7 @@ package `in`.abaddon.ladon
 
 import com.sun.source.tree.AssignmentTree
 import com.sun.source.tree.ExpressionTree
+import com.sun.source.tree.UnaryTree
 import com.sun.source.util.JavacTask
 import com.sun.source.util.TaskEvent
 import com.sun.source.util.TaskListener
@@ -19,13 +20,11 @@ import javax.lang.model.element.TypeElement
 import javax.tools.Diagnostic
 
 
-data class NumberCondition(val msg: (ExpressionTree) -> String, val isValid: (Int) -> Boolean)
-
 @SupportedAnnotationTypes("in.abaddon.ladon.*")
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
 class LadonProcessor : AbstractProcessor(){
 
-    val elements: MutableMap<Pair<String, String>, NumberCondition> = mutableMapOf()
+    val elements: MutableMap<Pair<String, String>, Guard> = mutableMapOf()
     private lateinit var messager: Messager
 
     override @Synchronized fun init(processingEnv: ProcessingEnvironment) {
@@ -37,15 +36,13 @@ class LadonProcessor : AbstractProcessor(){
 
     override fun process(annotations: MutableSet<out TypeElement>, roundEnv: RoundEnvironment): Boolean {
 
-        roundEnv.getElementsAnnotatedWith(Positive::class.java)
-                .forEach {
+        roundEnv.getElementsAnnotatedWith(Positive::class.java).forEach {
             val classElement = it.enclosingElement as TypeElement
             val pair = Pair(it.simpleName.toString(), classElement.qualifiedName.toString())
 
-            val msg = {expr: ExpressionTree -> "${expr} must be positive"}
-            val condition = {n: Int -> n > 0}
+            warn("---> ${it.asType()}")
 
-            elements.put(pair, NumberCondition(msg, condition))
+            elements.put(pair, PositiveGuard)
         }
 
         return true
@@ -84,23 +81,14 @@ class LadonProcessor : AbstractProcessor(){
                 val varName = lhs.identifier.toString()
                 val pair = Pair(varName,className)
 
-                val condition = elements[pair]
-                if(condition == null) return
+                val guard = elements[pair]
+                if(guard == null) return
 
-                if(!condition.isValid(rhs.value as Int)) {
-                    error(condition.msg(node))
+                if(!guard.isValid(rhs.value)) {
+                    error("$node ${guard.msg}")
                 }
             }
         }
     }
-
-    /*
-     * foo.no           = 3
-     * this.no          = 3
-     * JCFieldAccess    = JCLiteral
-     *
-     * foo.no
-     * Expression.Identifier
-     */
 }
 
