@@ -1,0 +1,14 @@
+apply plugin: "java"
+
+version '1.0-SNAPSHOT'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly project(':ladon-core')
+    annotationProcessor project(':ladon-core')
+}
