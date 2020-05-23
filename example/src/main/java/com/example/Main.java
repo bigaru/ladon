@@ -24,12 +24,12 @@ public class Main {
         // TODO MethodInvocation
         foo.anyNumber = Meow();
 
-        // TODO Ident
-        char a = 3;
-        foo.anyNumber = -a;
+        // DONE Ident
+        short a = -3;
+        foo.positiveInt = -a;
 
-        // TODO TypeCast
-        foo.anyNumber = (short) 3;
+        // DONE TypeCast
+        foo.positiveInt = (short) -a;
 
         // DONE Unary
         foo.positiveFloat = -+-34.0;

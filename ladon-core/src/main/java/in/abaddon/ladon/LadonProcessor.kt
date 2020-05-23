@@ -1,9 +1,13 @@
 package `in`.abaddon.ladon
 
 import com.sun.source.tree.AssignmentTree
+import com.sun.source.tree.BlockTree
 import com.sun.source.tree.ClassTree
+import com.sun.source.tree.IdentifierTree
 import com.sun.source.tree.LiteralTree
+import com.sun.source.tree.MethodInvocationTree
 import com.sun.source.tree.UnaryTree
+import com.sun.source.tree.VariableTree
 import com.sun.source.util.JavacTask
 import com.sun.source.util.TaskEvent
 import com.sun.source.util.TaskListener
@@ -21,7 +25,12 @@ import javax.lang.model.SourceVersion
 import javax.lang.model.element.TypeElement
 import javax.tools.Diagnostic
 
-data class InsideClass(val qualifiedName: String)
+data class MetaObject(
+    val qNameOfEnclosingClass: String?,
+                      // [variableName, value]
+    val localVariableMap: MutableMap<String, Any>,
+    val fromAssignment: Boolean
+)
 
 @SupportedAnnotationTypes("in.abaddon.ladon.*")
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
@@ -56,7 +65,7 @@ class LadonProcessor : AbstractProcessor(){
 
             if(event.kind == TaskEvent.Kind.ANALYZE){
                 val treePath = Trees.instance(processingEnv).getPath(event.typeElement)
-                TreeScanner().scan(treePath, null);
+                TreeScanner().scan(treePath, MetaObject(null, mutableMapOf(), false));
             }
 
         }
@@ -64,8 +73,19 @@ class LadonProcessor : AbstractProcessor(){
         override fun started(event: TaskEvent) {}
     }
 
-    inner class TreeScanner(): TreePathScanner<Any?, Any>(){
-        override fun visitAssignment(node: AssignmentTree, p: Any?) {
+    inner class TreeScanner(): TreePathScanner<Any?, MetaObject>(){
+        override fun visitBlock(node: BlockTree, p: MetaObject): Any? {
+            p.localVariableMap.clear()
+            return super.visitBlock(node, p)
+        }
+
+        override fun visitVariable(node: VariableTree, p: MetaObject): Any? {
+            val rhsValue = scan(node.initializer, p)
+            if(rhsValue != null) p.localVariableMap.put(node.name.toString(), rhsValue)
+            return super.visitVariable(node, p)
+        }
+
+        override fun visitAssignment(node: AssignmentTree, p: MetaObject): Any? {
 
             val lhs = node.variable
             val rhs = node.expression
@@ -76,47 +96,58 @@ class LadonProcessor : AbstractProcessor(){
             warn("Assignment rhs $rhs ${rhs.javaClass.simpleName}")
 
             if(lhs is JCTree.JCFieldAccess){
-                val rhsValue = scan(rhs,p)
+                val rhsValue = scan(rhs,p.copy(fromAssignment = true))
 
                 val className = lhs.expression.type.toString()
                 val varName = lhs.identifier.toString()
                 val pair = Pair(varName,className)
 
                 val guard = elements[pair]
-                if(guard == null || rhsValue == null) return
+                if(guard == null || rhsValue == null) return Unit
 
                 if(!guard.isValid(rhsValue)) {
                     error("$node ${guard.msg}")
                 }
             }
 
-            if(lhs is JCTree.JCIdent && p is InsideClass){
-                val rhsValue = scan(rhs,p)
+            if(lhs is JCTree.JCIdent){
+                val rhsValue = scan(rhs,p.copy(fromAssignment = true))
 
                 val varName = lhs.name.toString()
-                val pair = Pair(varName, p.qualifiedName)
+                val pair = Pair(varName, p.qNameOfEnclosingClass)
 
                 val guard = elements[pair]
-                if(guard == null || rhsValue == null) return
+                if(guard == null || rhsValue == null) return Unit
 
                 if(!guard.isValid(rhsValue)) {
                     error("$node ${guard.msg}")
                 }
             }
 
+            return super.visitAssignment(node, p)
         }
 
+        override fun visitMethodInvocation(node: MethodInvocationTree, p: MetaObject): Any? {
+            return super.visitMethodInvocation(node, p.copy(fromAssignment = false))
+        }
 
-        override fun visitClass(node: ClassTree, p: Any?): Any? {
+        override fun visitIdentifier(node: IdentifierTree, p: MetaObject): Any? {
+            if(p.fromAssignment) {
+                return p.localVariableMap[node.name.toString()]
+            }
+            return super.visitIdentifier(node, p)
+        }
+
+        override fun visitClass(node: ClassTree, p: MetaObject): Any? {
             val classDecl = node as JCTree.JCClassDecl
-            return super.visitClass(node, InsideClass(classDecl.type.toString()))
+            return super.visitClass(node, p.copy(qNameOfEnclosingClass = classDecl.type.toString()))
         }
 
-        override fun visitLiteral(node: LiteralTree, p: Any?): Any? {
+        override fun visitLiteral(node: LiteralTree, p: MetaObject): Any? {
             return node.value
         }
 
-        override fun visitUnary(node: UnaryTree, p: Any?): Any? {
+        override fun visitUnary(node: UnaryTree, p: MetaObject): Any? {
             val unary = node as JCTree.JCUnary
             val expr = scan(unary.expression,p)
 
