@@ -25,14 +25,18 @@ public class Main {
         foo.anyNumber = Meow();
 
         // TODO Ident
-        short a = 3;
-        foo.anyNumber = a;
+        char a = 3;
+        foo.anyNumber = -a;
 
         // TODO TypeCast
         foo.anyNumber = (short) 3;
 
-        // TODO Unary
-        foo.positiveFloat = -34f;
+        // DONE Unary
+        foo.positiveFloat = -+-34.0;
+        foo.positiveFloat = +-+-34.0d;
+
+        // TODO Inside class
+        // positiveFloat = -34f;
     }
 
     static int Meow() { return -6;}

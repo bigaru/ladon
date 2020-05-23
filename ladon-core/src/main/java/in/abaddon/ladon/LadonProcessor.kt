@@ -1,7 +1,7 @@
 package `in`.abaddon.ladon
 
 import com.sun.source.tree.AssignmentTree
-import com.sun.source.tree.ExpressionTree
+import com.sun.source.tree.LiteralTree
 import com.sun.source.tree.UnaryTree
 import com.sun.source.util.JavacTask
 import com.sun.source.util.TaskEvent
@@ -9,6 +9,7 @@ import com.sun.source.util.TaskListener
 import com.sun.source.util.TreePathScanner
 import com.sun.source.util.Trees
 import com.sun.tools.javac.tree.JCTree
+import java.lang.AssertionError
 import javax.annotation.processing.AbstractProcessor
 import javax.annotation.processing.Messager
 import javax.annotation.processing.ProcessingEnvironment
@@ -39,9 +40,6 @@ class LadonProcessor : AbstractProcessor(){
         roundEnv.getElementsAnnotatedWith(Positive::class.java).forEach {
             val classElement = it.enclosingElement as TypeElement
             val pair = Pair(it.simpleName.toString(), classElement.qualifiedName.toString())
-
-            warn("---> ${it.asType()}")
-
             elements.put(pair, PositiveGuard)
         }
 
@@ -64,9 +62,8 @@ class LadonProcessor : AbstractProcessor(){
         override fun started(event: TaskEvent) {}
     }
 
-    inner class TreeScanner(): TreePathScanner<Unit, Any>(){
+    inner class TreeScanner(): TreePathScanner<Any?, Any>(){
         override fun visitAssignment(node: AssignmentTree, p: Any?) {
-            super.visitAssignment(node, p)
 
             val lhs = node.variable
             val rhs = node.expression
@@ -76,18 +73,45 @@ class LadonProcessor : AbstractProcessor(){
             warn("Assignment lhs $lhs ${lhs.javaClass.simpleName}")
             warn("Assignment rhs $rhs ${rhs.javaClass.simpleName}")
 
-            if(lhs is JCTree.JCFieldAccess && rhs is JCTree.JCLiteral){
+            if(lhs is JCTree.JCFieldAccess){
+                val rhsValue = scan(rhs,p)
+                warn("> $rhsValue")
+
                 val className = lhs.expression.type.toString()
                 val varName = lhs.identifier.toString()
                 val pair = Pair(varName,className)
 
                 val guard = elements[pair]
-                if(guard == null) return
+                if(guard == null || rhsValue == null) return
 
-                if(!guard.isValid(rhs.value)) {
+                if(!guard.isValid(rhsValue)) {
                     error("$node ${guard.msg}")
                 }
             }
+
+        }
+
+        override fun visitLiteral(node: LiteralTree, p: Any?): Any? {
+            return node.value
+        }
+
+        override fun visitUnary(node: UnaryTree, p: Any?): Any? {
+            val unary = node as JCTree.JCUnary
+            val expr = scan(unary.expression,p)
+
+            if(expr != null && unary.tag == JCTree.Tag.NEG) {
+                return when (expr) {
+                    is Byte -> -expr
+                    is Short -> -expr
+                    is Int -> -expr
+                    is Long -> -expr
+                    is Float -> -expr
+                    is Double -> -expr
+                    else -> throw AssertionError("should have handled all cases")
+                }
+            }
+
+            return expr
         }
     }
 }
