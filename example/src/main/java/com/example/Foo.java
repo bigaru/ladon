@@ -1,11 +1,13 @@
 package com.example;
 
-import in.abaddon.ladon.Guard;
+import in.abaddon.ladon.Positive;
 
 public class  Foo {
-    @Guard int proVar = 4;
-    int unVar = 4;
-}
+    @Positive int positiveNumber = 4;
+    int anyNumber = 4;
 
-class Bar{
+    void bar(){
+        positiveNumber = -12;
+        this.positiveNumber = 133;
+    }
 }

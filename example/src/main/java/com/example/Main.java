@@ -5,11 +5,11 @@ public class Main {
         System.out.println("Pika Example");
 
         Foo foo = new Foo();
-        foo.proVar = 43;
-        foo.unVar = -1;
+        foo.positiveNumber = 43;
+        foo.anyNumber = -1;
 
         // TODO not handled
-        //foo.proVar = Meow();
+        foo.anyNumber = Meow();
     }
 
     static int Meow() { return -6;}
