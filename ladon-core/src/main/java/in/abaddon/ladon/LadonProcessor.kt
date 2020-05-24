@@ -5,7 +5,6 @@ import com.sun.source.tree.BlockTree
 import com.sun.source.tree.ClassTree
 import com.sun.source.tree.IdentifierTree
 import com.sun.source.tree.LiteralTree
-import com.sun.source.tree.MethodInvocationTree
 import com.sun.source.tree.UnaryTree
 import com.sun.source.tree.VariableTree
 import com.sun.source.util.JavacTask
@@ -95,7 +94,7 @@ class LadonProcessor : AbstractProcessor(){
             warn("Assignment lhs $lhs ${lhs.javaClass.simpleName}")
             warn("Assignment rhs $rhs ${rhs.javaClass.simpleName}")
 
-            if(lhs is JCTree.JCFieldAccess){
+            if(lhs is JCTree.JCFieldAccess && !(rhs is JCTree.JCMethodInvocation)){
                 val rhsValue = scan(rhs,p.copy(fromAssignment = true))
 
                 val className = lhs.expression.type.toString()
@@ -110,7 +109,7 @@ class LadonProcessor : AbstractProcessor(){
                 }
             }
 
-            if(lhs is JCTree.JCIdent){
+            if(lhs is JCTree.JCIdent && !(rhs is JCTree.JCMethodInvocation)){
                 val rhsValue = scan(rhs,p.copy(fromAssignment = true))
 
                 val varName = lhs.name.toString()
@@ -125,10 +124,6 @@ class LadonProcessor : AbstractProcessor(){
             }
 
             return super.visitAssignment(node, p)
-        }
-
-        override fun visitMethodInvocation(node: MethodInvocationTree, p: MetaObject): Any? {
-            return super.visitMethodInvocation(node, p.copy(fromAssignment = false))
         }
 
         override fun visitIdentifier(node: IdentifierTree, p: MetaObject): Any? {

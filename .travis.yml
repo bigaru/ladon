@@ -2,7 +2,9 @@ language: java
 
 jdk:
   - openjdk8
-  - openjdk11
+# TODO re-enable later
+# trouble with Jvm.current().toolsJar
+#  - openjdk11
 
 script:
   - ./gradlew :ladon-core:clean :ladon-core:test
