@@ -5,6 +5,7 @@ import com.sun.source.tree.BlockTree
 import com.sun.source.tree.ClassTree
 import com.sun.source.tree.IdentifierTree
 import com.sun.source.tree.LiteralTree
+import com.sun.source.tree.MemberSelectTree
 import com.sun.source.tree.UnaryTree
 import com.sun.source.tree.VariableTree
 import com.sun.source.util.JavacTask
@@ -21,13 +22,16 @@ import javax.annotation.processing.RoundEnvironment
 import javax.annotation.processing.SupportedAnnotationTypes
 import javax.annotation.processing.SupportedSourceVersion
 import javax.lang.model.SourceVersion
+import javax.lang.model.element.Modifier
 import javax.lang.model.element.TypeElement
 import javax.tools.Diagnostic
 
 data class MetaObject(
     val qNameOfEnclosingClass: String?,
-                      // [variableName, value]
+    //                        [variableName, value]
     val localVariableMap: MutableMap<String, Any>,
+    //                        [[varName, className], value]
+    val staticVariableMap: Map<Pair<String, String>, Any>,
     val fromAssignment: Boolean
 )
 
@@ -64,7 +68,7 @@ class LadonProcessor : AbstractProcessor(){
 
             if(event.kind == TaskEvent.Kind.ANALYZE){
                 val treePath = Trees.instance(processingEnv).getPath(event.typeElement)
-                TreeScanner().scan(treePath, MetaObject(null, mutableMapOf(), false));
+                TreeScanner().scan(treePath, MetaObject(null, mutableMapOf(), mapOf(), false));
             }
 
         }
@@ -72,7 +76,10 @@ class LadonProcessor : AbstractProcessor(){
         override fun started(event: TaskEvent) {}
     }
 
+    val staticVariableMap = mutableMapOf<Pair<String, String>, Any>()
+
     inner class TreeScanner(): TreePathScanner<Any?, MetaObject>(){
+
         override fun visitBlock(node: BlockTree, p: MetaObject): Any? {
             p.localVariableMap.clear()
             return super.visitBlock(node, p)
@@ -80,7 +87,17 @@ class LadonProcessor : AbstractProcessor(){
 
         override fun visitVariable(node: VariableTree, p: MetaObject): Any? {
             val rhsValue = scan(node.initializer, p)
-            if(rhsValue != null) p.localVariableMap.put(node.name.toString(), rhsValue)
+            val isStaticVariable = node.modifiers.flags.contains(Modifier.STATIC)
+
+            if(rhsValue != null && isStaticVariable && p.qNameOfEnclosingClass != null) {
+                val varClassPair = Pair(node.name.toString(), p.qNameOfEnclosingClass)
+                staticVariableMap.put(varClassPair, rhsValue)
+            }
+
+            if(rhsValue != null && !isStaticVariable) {
+                p.localVariableMap.put(node.name.toString(), rhsValue)
+            }
+
             return super.visitVariable(node, p)
         }
 
@@ -89,7 +106,7 @@ class LadonProcessor : AbstractProcessor(){
             val lhs = node.variable
             val rhs = node.expression
 
-            warn("---------------------")
+            warn("--------------------- ${staticVariableMap.size}")
             warn("Assignment node $node")
             warn("Assignment lhs $lhs ${lhs.javaClass.simpleName}")
             warn("Assignment rhs $rhs ${rhs.javaClass.simpleName}")
@@ -111,7 +128,7 @@ class LadonProcessor : AbstractProcessor(){
                 val pair = Pair(varName,className)
 
                 val guard = elements[pair]
-                if(guard == null || rhsValue == null) return Unit
+                if(guard == null || rhsValue == null) return super.visitAssignment(node, p)
 
                 if(!guard.isValid(rhsValue)) {
                     error("$node ${guard.msg}")
@@ -125,7 +142,7 @@ class LadonProcessor : AbstractProcessor(){
                 val pair = Pair(varName, p.qNameOfEnclosingClass)
 
                 val guard = elements[pair]
-                if(guard == null || rhsValue == null) return Unit
+                if(guard == null || rhsValue == null) return super.visitAssignment(node, p)
 
                 if(!guard.isValid(rhsValue)) {
                     error("$node ${guard.msg}")
@@ -133,6 +150,17 @@ class LadonProcessor : AbstractProcessor(){
             }
 
             return super.visitAssignment(node, p)
+        }
+
+        override fun visitMemberSelect(node: MemberSelectTree, p: MetaObject): Any? {
+            if(node is JCTree.JCFieldAccess) {
+                val varClassPair = Pair(node.name.toString(), node.selected.type.toString())
+                val staticValue = staticVariableMap[varClassPair]
+
+                if(staticValue != null) return staticValue
+            }
+
+            return super.visitMemberSelect(node, p)
         }
 
         override fun visitIdentifier(node: IdentifierTree, p: MetaObject): Any? {

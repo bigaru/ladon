@@ -327,7 +327,6 @@ public class  Foo {
         CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
     }
 
-
     @Test
     fun insideClassWithoutThis(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
@@ -371,6 +370,63 @@ public class Main {
         val compilation = Compiler.javac()
             .withProcessors(LadonProcessor())
             .compile(fooFile, mainFile)
+
+        CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
+    }
+
+    @Ignore
+    @Test
+    fun methodReturnsValue(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class  Foo {
+    @Positive int positive = 4;
+}
+""")
+
+        val mainFile = JavaFileObjects.forSourceString("Main", """
+public class Main {
+    public static void main(String[] args){
+        Foo foo = new Foo();
+        foo.positive = getNegative();
+    }
+    
+    static int getNegative(){
+        return -42;
+    }
+}
+""")
+
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile, mainFile)
+
+        CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
+    }
+
+    @Test
+    fun staticVariable(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class  Foo {
+    @Positive int positive = 4;
+    
+    public void bar(){
+        positive = Main.NEGATIVE_NO;
+    }
+}
+""")
+        val mainFile = JavaFileObjects.forSourceString("Main", """
+public class Main {
+    static int NEGATIVE_NO = -42;
+}
+""")
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            // TODO switch order of files
+            .compile(mainFile, fooFile)
 
         CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
     }
