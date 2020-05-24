@@ -94,6 +94,15 @@ class LadonProcessor : AbstractProcessor(){
             warn("Assignment lhs $lhs ${lhs.javaClass.simpleName}")
             warn("Assignment rhs $rhs ${rhs.javaClass.simpleName}")
 
+            if(lhs is JCTree.JCIdent){
+                val varName = lhs.name.toString()
+                val rhsValue = scan(node.expression, p)
+
+                if(p.localVariableMap.containsKey(varName) && rhsValue != null){
+                    p.localVariableMap.put(varName, rhsValue)
+                }
+            }
+
             if(lhs is JCTree.JCFieldAccess && !(rhs is JCTree.JCMethodInvocation)){
                 val rhsValue = scan(rhs,p.copy(fromAssignment = true))
 

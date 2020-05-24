@@ -275,8 +275,6 @@ public class Main {
         CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
     }
 
-    // TODO implement this case
-    @Ignore
     @Test
     fun localVariableNewlyAssigned(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
@@ -291,6 +289,8 @@ public class  Foo {
 public class Main {
     public static void main(String[] args){
         int bar = 42;
+        bar = -42;
+        bar = 42;
         bar = -42;
     
         Foo foo = new Foo();
