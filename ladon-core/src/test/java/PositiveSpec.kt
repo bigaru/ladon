@@ -12,7 +12,7 @@ class PositiveSpec {
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive byte positive = 4;
 }
 """)
@@ -38,7 +38,7 @@ public class Main {
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive short positive = 4;
 }
 """)
@@ -64,7 +64,7 @@ public class Main {
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive long positive = 4L;
 }
 """)
@@ -90,7 +90,7 @@ public class Main {
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive int positive = 4;
     int anyNumber = 4;
 }
@@ -118,7 +118,7 @@ public class Main {
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive int positive = 4;
 }
 """)
@@ -146,7 +146,7 @@ package com.example;
 
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive Integer positive = 4;
 }
 """)
@@ -174,7 +174,7 @@ public class Main {
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive float positive = 4f;
 }
 """)
@@ -200,7 +200,7 @@ public class Main {
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive double positive = 4.0;
 }
 """)
@@ -226,7 +226,7 @@ public class Main {
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive double positive = 4.0;
 }
 """)
@@ -252,7 +252,7 @@ public class Main {
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive int positive = 4;
 }
 """)
@@ -280,7 +280,7 @@ public class Main {
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive int positive = 4;
 }
 """)
@@ -311,7 +311,7 @@ public class Main {
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive double positive = 4.0;
     
     public void bar(){
@@ -332,7 +332,7 @@ public class  Foo {
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive double positive = 4.0;
     
     public void bar(){
@@ -353,7 +353,7 @@ public class  Foo {
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive short positive = 4;
 }
 """)
@@ -376,11 +376,11 @@ public class Main {
 
     @Ignore
     @Test
-    fun methodReturnsValue(){
+    fun staticMethodReturnsValue(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive int positive = 4;
 }
 """)
@@ -406,11 +406,11 @@ public class Main {
     }
 
     @Test
-    fun staticVariable(){
+    fun qualifiedConstantVariable(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
-public class  Foo {
+public class Foo {
     @Positive int positive = 4;
     
     public void bar(){
@@ -420,15 +420,63 @@ public class  Foo {
 """)
         val mainFile = JavaFileObjects.forSourceString("Main", """
 public class Main {
-    static int NEGATIVE_NO = -42;
+    final static int NEGATIVE_NO = -42;
+}
+""")
+        // Different order of file compilation must not matter
+        val compilation1 = Compiler.javac().withProcessors(LadonProcessor()).compile(fooFile, mainFile)
+        val compilation2 = Compiler.javac().withProcessors(LadonProcessor()).compile(mainFile, fooFile)
+
+        CompilationSubject.assertThat(compilation1).hadErrorContaining("must be positive")
+        CompilationSubject.assertThat(compilation2).hadErrorContaining("must be positive")
+    }
+
+    @Ignore
+    @Test
+    fun localConstantVariable(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class  Foo {
+    final static int NEGATIVE_NO = -42;
+
+    @Positive int positive = 4;
+    
+    public void bar(){
+        positive = NEGATIVE_NO;
+    }
 }
 """)
         val compilation = Compiler.javac()
             .withProcessors(LadonProcessor())
-            // TODO switch order of files
-            .compile(mainFile, fooFile)
+            .compile(fooFile)
 
         CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
     }
 
+    @Ignore
+    @Test
+    fun inheritedConstantVariable(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class Foo extends Bar {
+    @Positive int positive = 4;
+    
+    public void bar(){
+        positive = NEGATIVE_NO;
+    }
+}
+""")
+        val mainFile = JavaFileObjects.forSourceString("Main", """
+public class Bar {
+    final static int NEGATIVE_NO = -42;
+}
+""")
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile, mainFile)
+
+        CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
+    }
 }

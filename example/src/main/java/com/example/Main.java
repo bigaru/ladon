@@ -13,11 +13,6 @@ package com.example;
  * JCFieldAccess    = JCUnary
  */
 
-// TODO order of analyzing matters
-class Bar{
-    static int BAR_VALUE = -1;
-}
-
 public class Main {
     public static void main(String[] args){
         System.out.println("Pika Example");
@@ -33,9 +28,12 @@ public class Main {
         int a = -3;
         a = 3;
         a = -2;
-        foo.positiveInt = Bar.BAR_VALUE;
+        foo.positiveInt = -Bar.BAR_VALUE;
     }
 
     static int Meow() { return -6;}
 }
 
+class Bar{
+    final static int BAR_VALUE = -1;
+}

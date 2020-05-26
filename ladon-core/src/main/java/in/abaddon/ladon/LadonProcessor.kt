@@ -1,20 +1,9 @@
 package `in`.abaddon.ladon
 
-import com.sun.source.tree.AssignmentTree
-import com.sun.source.tree.BlockTree
-import com.sun.source.tree.ClassTree
-import com.sun.source.tree.IdentifierTree
-import com.sun.source.tree.LiteralTree
-import com.sun.source.tree.MemberSelectTree
-import com.sun.source.tree.UnaryTree
-import com.sun.source.tree.VariableTree
 import com.sun.source.util.JavacTask
 import com.sun.source.util.TaskEvent
 import com.sun.source.util.TaskListener
-import com.sun.source.util.TreePathScanner
 import com.sun.source.util.Trees
-import com.sun.tools.javac.tree.JCTree
-import java.lang.AssertionError
 import javax.annotation.processing.AbstractProcessor
 import javax.annotation.processing.Messager
 import javax.annotation.processing.ProcessingEnvironment
@@ -24,21 +13,13 @@ import javax.annotation.processing.SupportedSourceVersion
 import javax.lang.model.SourceVersion
 import javax.lang.model.element.Modifier
 import javax.lang.model.element.TypeElement
+import javax.lang.model.element.VariableElement
 import javax.tools.Diagnostic
-
-data class MetaObject(
-    val qNameOfEnclosingClass: String?,
-    //                        [variableName, value]
-    val localVariableMap: MutableMap<String, Any>,
-    //                        [[varName, className], value]
-    val staticVariableMap: Map<Pair<String, String>, Any>,
-    val fromAssignment: Boolean
-)
 
 @SupportedAnnotationTypes("in.abaddon.ladon.*")
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
 class LadonProcessor : AbstractProcessor(){
-
+    val constantMap = mutableMapOf<Pair<String, String>, Any>()
     val elements: MutableMap<Pair<String, String>, Guard> = mutableMapOf()
     private lateinit var messager: Messager
 
@@ -49,7 +30,21 @@ class LadonProcessor : AbstractProcessor(){
         JavacTask.instance(processingEnv).addTaskListener(LadonTaskListener())
     }
 
+    fun collectConstants(roundEnv: RoundEnvironment){
+        roundEnv.rootElements.flatMap{ typeElement ->
+            typeElement.enclosedElements
+                       .filter { it.modifiers.containsAll(setOf(Modifier.FINAL, Modifier.STATIC)) }
+                       .filterIsInstance<VariableElement>()
+                       .map { ((typeElement as TypeElement).qualifiedName) to it}
+        }
+        .forEach{
+            val varClassPair = Pair(it.second.simpleName.toString(), it.first.toString())
+            constantMap.put(varClassPair, it.second.constantValue)
+        }
+    }
+
     override fun process(annotations: MutableSet<out TypeElement>, roundEnv: RoundEnvironment): Boolean {
+        collectConstants(roundEnv)
 
         roundEnv.getElementsAnnotatedWith(Positive::class.java).forEach {
             val classElement = it.enclosingElement as TypeElement
@@ -64,139 +59,16 @@ class LadonProcessor : AbstractProcessor(){
     private fun error(msg: String) = messager.printMessage(Diagnostic.Kind.ERROR, msg)
 
     inner class LadonTaskListener(): TaskListener{
-        override fun finished(event: TaskEvent) {
+        val typeCheckingScanner = TypeCheckingScanner(elements, messager, constantMap)
 
+        override fun finished(event: TaskEvent) {
             if(event.kind == TaskEvent.Kind.ANALYZE){
                 val treePath = Trees.instance(processingEnv).getPath(event.typeElement)
-                TreeScanner().scan(treePath, MetaObject(null, mutableMapOf(), mapOf(), false));
+                typeCheckingScanner.scan(treePath, MetaObject(null, mutableMapOf(), false));
             }
 
         }
 
         override fun started(event: TaskEvent) {}
     }
-
-    val staticVariableMap = mutableMapOf<Pair<String, String>, Any>()
-
-    inner class TreeScanner(): TreePathScanner<Any?, MetaObject>(){
-
-        override fun visitBlock(node: BlockTree, p: MetaObject): Any? {
-            p.localVariableMap.clear()
-            return super.visitBlock(node, p)
-        }
-
-        override fun visitVariable(node: VariableTree, p: MetaObject): Any? {
-            val rhsValue = scan(node.initializer, p)
-            val isStaticVariable = node.modifiers.flags.contains(Modifier.STATIC)
-
-            if(rhsValue != null && isStaticVariable && p.qNameOfEnclosingClass != null) {
-                val varClassPair = Pair(node.name.toString(), p.qNameOfEnclosingClass)
-                staticVariableMap.put(varClassPair, rhsValue)
-            }
-
-            if(rhsValue != null && !isStaticVariable) {
-                p.localVariableMap.put(node.name.toString(), rhsValue)
-            }
-
-            return super.visitVariable(node, p)
-        }
-
-        override fun visitAssignment(node: AssignmentTree, p: MetaObject): Any? {
-
-            val lhs = node.variable
-            val rhs = node.expression
-
-            warn("--------------------- ${staticVariableMap.size}")
-            warn("Assignment node $node")
-            warn("Assignment lhs $lhs ${lhs.javaClass.simpleName}")
-            warn("Assignment rhs $rhs ${rhs.javaClass.simpleName}")
-
-            if(lhs is JCTree.JCIdent){
-                val varName = lhs.name.toString()
-                val rhsValue = scan(node.expression, p)
-
-                if(p.localVariableMap.containsKey(varName) && rhsValue != null){
-                    p.localVariableMap.put(varName, rhsValue)
-                }
-            }
-
-            if(lhs is JCTree.JCFieldAccess && !(rhs is JCTree.JCMethodInvocation)){
-                val rhsValue = scan(rhs,p.copy(fromAssignment = true))
-
-                val className = lhs.expression.type.toString()
-                val varName = lhs.identifier.toString()
-                val pair = Pair(varName,className)
-
-                val guard = elements[pair]
-                if(guard == null || rhsValue == null) return super.visitAssignment(node, p)
-
-                if(!guard.isValid(rhsValue)) {
-                    error("$node ${guard.msg}")
-                }
-            }
-
-            if(lhs is JCTree.JCIdent && !(rhs is JCTree.JCMethodInvocation)){
-                val rhsValue = scan(rhs,p.copy(fromAssignment = true))
-
-                val varName = lhs.name.toString()
-                val pair = Pair(varName, p.qNameOfEnclosingClass)
-
-                val guard = elements[pair]
-                if(guard == null || rhsValue == null) return super.visitAssignment(node, p)
-
-                if(!guard.isValid(rhsValue)) {
-                    error("$node ${guard.msg}")
-                }
-            }
-
-            return super.visitAssignment(node, p)
-        }
-
-        override fun visitMemberSelect(node: MemberSelectTree, p: MetaObject): Any? {
-            if(node is JCTree.JCFieldAccess) {
-                val varClassPair = Pair(node.name.toString(), node.selected.type.toString())
-                val staticValue = staticVariableMap[varClassPair]
-
-                if(staticValue != null) return staticValue
-            }
-
-            return super.visitMemberSelect(node, p)
-        }
-
-        override fun visitIdentifier(node: IdentifierTree, p: MetaObject): Any? {
-            if(p.fromAssignment) {
-                return p.localVariableMap[node.name.toString()]
-            }
-            return super.visitIdentifier(node, p)
-        }
-
-        override fun visitClass(node: ClassTree, p: MetaObject): Any? {
-            val classDecl = node as JCTree.JCClassDecl
-            return super.visitClass(node, p.copy(qNameOfEnclosingClass = classDecl.type.toString()))
-        }
-
-        override fun visitLiteral(node: LiteralTree, p: MetaObject): Any? {
-            return node.value
-        }
-
-        override fun visitUnary(node: UnaryTree, p: MetaObject): Any? {
-            val unary = node as JCTree.JCUnary
-            val expr = scan(unary.expression,p)
-
-            if(expr != null && unary.tag == JCTree.Tag.NEG) {
-                return when (expr) {
-                    is Byte -> -expr
-                    is Short -> -expr
-                    is Int -> -expr
-                    is Long -> -expr
-                    is Float -> -expr
-                    is Double -> -expr
-                    else -> throw AssertionError("should have handled all cases")
-                }
-            }
-
-            return expr
-        }
-    }
 }
-
