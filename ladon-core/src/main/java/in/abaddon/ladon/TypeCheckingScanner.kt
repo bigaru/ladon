@@ -3,6 +3,7 @@ package `in`.abaddon.ladon
 import com.sun.source.tree.AssignmentTree
 import com.sun.source.tree.BlockTree
 import com.sun.source.tree.ClassTree
+import com.sun.source.tree.ExpressionTree
 import com.sun.source.tree.IdentifierTree
 import com.sun.source.tree.LiteralTree
 import com.sun.source.tree.MemberSelectTree
@@ -14,10 +15,8 @@ import java.lang.AssertionError
 import javax.annotation.processing.Messager
 import javax.tools.Diagnostic
 
-data class MetaObject(
+data class TraversalBag(
     val qualifiedNameOfEnclosingClass: String?,
-    //                        [variableName, value]
-    val localVariableMap: MutableMap<String, Any>,
     val fromAssignment: Boolean
 )
 
@@ -25,77 +24,80 @@ class TypeCheckingScanner(
     val elements: MutableMap<Pair<String, String>, Guard>,
     val messager: Messager,
     val constantMap: MutableMap<Pair<String, String>, Any>
-): TreePathScanner<Any?, MetaObject>(){
+): TreePathScanner<Any?, TraversalBag>(){
+    //                        [variableName, value]
+    val localVariableMap: MutableMap<String, Any> = mutableMapOf()
+
     protected fun warn(msg: String) = messager.printMessage(Diagnostic.Kind.WARNING, msg)
     protected fun error(msg: String) = messager.printMessage(Diagnostic.Kind.ERROR, msg)
 
-    override fun visitBlock(node: BlockTree, p: MetaObject): Any? {
-        p.localVariableMap.clear()
-        return super.visitBlock(node, p)
+    override fun visitBlock(node: BlockTree, bag: TraversalBag): Any? {
+        localVariableMap.clear()
+        return super.visitBlock(node, bag)
     }
 
-    override fun visitVariable(node: VariableTree, p: MetaObject): Any? {
-        val rhsValue = scan(node.initializer, p)
+    override fun visitVariable(node: VariableTree, bag: TraversalBag): Any? {
+        val rhsValue = scan(node.initializer, bag)
 
         if(rhsValue != null) {
-            p.localVariableMap.put(node.name.toString(), rhsValue)
+            localVariableMap.put(node.name.toString(), rhsValue)
         }
 
-        return super.visitVariable(node, p)
+        return super.visitVariable(node, bag)
     }
 
-    override fun visitAssignment(node: AssignmentTree, p: MetaObject): Any? {
+    private fun collectLocalVariable(identNode: IdentifierTree, rhsNode: ExpressionTree, bag: TraversalBag){
+        val varName = identNode.name.toString()
+        val rhsValue = scan(rhsNode, bag)
+
+        if(localVariableMap.containsKey(varName) && rhsValue != null){
+            localVariableMap.put(varName, rhsValue)
+        }
+    }
+
+    private fun verifyAssignment(varClassPair: Pair<String, String?>, node: AssignmentTree, bag: TraversalBag){
+        val rhsValue = scan(node.expression, bag.copy(fromAssignment = true))
+        val predicate = elements[varClassPair]
+
+        if(predicate == null || rhsValue == null) return
+
+        if(!predicate.isValid(rhsValue)) {
+            error("$node ${predicate.msg}")
+        }
+    }
+
+    override fun visitAssignment(node: AssignmentTree, bag: TraversalBag): Any? {
 
         val lhs = node.variable
         val rhs = node.expression
 
-        warn("--------------------- ${constantMap.size}")
+        warn("---------------------")
         warn("Assignment node $node")
         warn("Assignment lhs $lhs ${lhs.javaClass.simpleName}")
         warn("Assignment rhs $rhs ${rhs.javaClass.simpleName}")
 
         if(lhs is JCTree.JCIdent){
-            val varName = lhs.name.toString()
-            val rhsValue = scan(node.expression, p)
-
-            if(p.localVariableMap.containsKey(varName) && rhsValue != null){
-                p.localVariableMap.put(varName, rhsValue)
-            }
+            collectLocalVariable(lhs, rhs, bag)
         }
 
-        if(lhs is JCTree.JCFieldAccess && !(rhs is JCTree.JCMethodInvocation)){
-            val rhsValue = scan(rhs,p.copy(fromAssignment = true))
-
+        if(lhs is JCTree.JCFieldAccess){
             val className = lhs.expression.type.toString()
             val varName = lhs.identifier.toString()
             val pair = Pair(varName,className)
 
-            val guard = elements[pair]
-            if(guard == null || rhsValue == null) return super.visitAssignment(node, p)
-
-            if(!guard.isValid(rhsValue)) {
-                error("$node ${guard.msg}")
-            }
+            verifyAssignment(pair, node, bag)
         }
 
-        if(lhs is JCTree.JCIdent && !(rhs is JCTree.JCMethodInvocation)){
-            val rhsValue = scan(rhs,p.copy(fromAssignment = true))
-
+        if(lhs is JCTree.JCIdent){
             val varName = lhs.name.toString()
-            val pair = Pair(varName, p.qualifiedNameOfEnclosingClass)
-
-            val guard = elements[pair]
-            if(guard == null || rhsValue == null) return super.visitAssignment(node, p)
-
-            if(!guard.isValid(rhsValue)) {
-                error("$node ${guard.msg}")
-            }
+            val pair = Pair(varName, bag.qualifiedNameOfEnclosingClass)
+            verifyAssignment(pair, node, bag)
         }
 
-        return super.visitAssignment(node, p)
+        return super.visitAssignment(node, bag)
     }
 
-    override fun visitMemberSelect(node: MemberSelectTree, p: MetaObject): Any? {
+    override fun visitMemberSelect(node: MemberSelectTree, bag: TraversalBag): Any? {
         if(node is JCTree.JCFieldAccess) {
             val varClassPair = Pair(node.name.toString(), node.selected.type.toString())
             val staticValue = constantMap[varClassPair]
@@ -103,28 +105,28 @@ class TypeCheckingScanner(
             if(staticValue != null) return staticValue
         }
 
-        return super.visitMemberSelect(node, p)
+        return super.visitMemberSelect(node, bag)
     }
 
-    override fun visitIdentifier(node: IdentifierTree, p: MetaObject): Any? {
-        if(p.fromAssignment) {
-            return p.localVariableMap[node.name.toString()]
+    override fun visitIdentifier(node: IdentifierTree, bag: TraversalBag): Any? {
+        if(bag.fromAssignment) {
+            return localVariableMap[node.name.toString()]
         }
-        return super.visitIdentifier(node, p)
+        return super.visitIdentifier(node, bag)
     }
 
-    override fun visitClass(node: ClassTree, p: MetaObject): Any? {
+    override fun visitClass(node: ClassTree, bag: TraversalBag): Any? {
         val classDecl = node as JCTree.JCClassDecl
-        return super.visitClass(node, p.copy(qualifiedNameOfEnclosingClass = classDecl.type.toString()))
+        return super.visitClass(node, bag.copy(qualifiedNameOfEnclosingClass = classDecl.type.toString()))
     }
 
-    override fun visitLiteral(node: LiteralTree, p: MetaObject): Any? {
+    override fun visitLiteral(node: LiteralTree, bag: TraversalBag): Any? {
         return node.value
     }
 
-    override fun visitUnary(node: UnaryTree, p: MetaObject): Any? {
+    override fun visitUnary(node: UnaryTree, bag: TraversalBag): Any? {
         val unary = node as JCTree.JCUnary
-        val expr = scan(unary.expression,p)
+        val expr = scan(unary.expression,bag)
 
         if(expr != null && unary.tag == JCTree.Tag.NEG) {
             return when (expr) {

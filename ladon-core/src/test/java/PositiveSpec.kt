@@ -221,6 +221,38 @@ public class Main {
         CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
     }
 
+    // TODO do it through node.type and pass CONSTANT
+    @Ignore
+    @Test
+    fun integerDoNotAcceptNull(){
+        val fooFile = JavaFileObjects.forSourceString("com.example.Foo", """
+package com.example;
+
+import in.abaddon.ladon.Positive;
+
+public class Foo {
+    @Positive Integer positive = 4;
+}
+""")
+
+        val mainFile = JavaFileObjects.forSourceString("com.example.Main", """
+package com.example;
+
+public class Main {
+    public static void main(String[] args){
+        Foo foo = new Foo();
+        foo.positive = null;
+    }
+}
+""")
+
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile, mainFile)
+
+        CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
+    }
+
     @Test
     fun nestedUnary(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """

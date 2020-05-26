@@ -64,7 +64,7 @@ class LadonProcessor : AbstractProcessor(){
         override fun finished(event: TaskEvent) {
             if(event.kind == TaskEvent.Kind.ANALYZE){
                 val treePath = Trees.instance(processingEnv).getPath(event.typeElement)
-                typeCheckingScanner.scan(treePath, MetaObject(null, mutableMapOf(), false));
+                typeCheckingScanner.scan(treePath, TraversalBag(null, false));
             }
 
         }

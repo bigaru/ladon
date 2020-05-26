@@ -25,10 +25,9 @@ public class Main {
         foo.anyNumber = Meow();
 
         // DONE Ident
-        int a = -3;
-        a = 3;
-        a = -2;
-        foo.positiveInt = -Bar.BAR_VALUE;
+        int a = 0;
+        // TODO what?
+        foo.positiveInt = null;
     }
 
     static int Meow() { return -6;}
