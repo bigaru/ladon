@@ -460,7 +460,7 @@ public class Main {
     }
 
     @Test
-    fun qualifiedConstantVariable(){
+    fun qualifiedConstantVariableFromClass(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
@@ -485,7 +485,32 @@ public class Main {
         CompilationSubject.assertThat(compilation2).hadErrorContaining("must be positive")
     }
 
-    @Ignore
+    @Test
+    fun qualifiedConstantVariableFromInterface(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class Foo {
+    @Positive int positive = 4;
+    
+    public void bar(){
+        positive = IMain.NEGATIVE_NO;
+    }
+}
+""")
+        val mainFile = JavaFileObjects.forSourceString("IMain", """
+public interface IMain {
+    int NEGATIVE_NO = -42;
+}
+""")
+        // Different order of file compilation must not matter
+        val compilation1 = Compiler.javac().withProcessors(LadonProcessor()).compile(fooFile, mainFile)
+        val compilation2 = Compiler.javac().withProcessors(LadonProcessor()).compile(mainFile, fooFile)
+
+        CompilationSubject.assertThat(compilation1).hadErrorContaining("must be positive")
+        CompilationSubject.assertThat(compilation2).hadErrorContaining("must be positive")
+    }
+
     @Test
     fun localConstantVariable(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
@@ -510,7 +535,7 @@ public class  Foo {
 
     @Ignore
     @Test
-    fun inheritedConstantVariable(){
+    fun inheritedConstantVariableFromBase(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
@@ -522,7 +547,7 @@ public class Foo extends Bar {
     }
 }
 """)
-        val mainFile = JavaFileObjects.forSourceString("Main", """
+        val mainFile = JavaFileObjects.forSourceString("Bar", """
 public class Bar {
     final static int NEGATIVE_NO = -42;
 }
@@ -536,7 +561,32 @@ public class Bar {
 
     @Ignore
     @Test
-    fun doNotCheckConstantByShadowing(){
+    fun inheritedConstantVariableFromInterface(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class Foo implements Bar {
+    @Positive int positive = 4;
+    
+    public void bar(){
+        positive = NEGATIVE_NO;
+    }
+}
+""")
+        val mainFile = JavaFileObjects.forSourceString("Bar", """
+public interface Bar {
+    int NEGATIVE_NO = -42;
+}
+""")
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile, mainFile)
+
+        CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
+    }
+
+    @Test
+    fun takeShadowedValueInsteadOfConstant(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 

@@ -109,9 +109,17 @@ class TypeCheckingScanner(
     }
 
     override fun visitIdentifier(node: IdentifierTree, bag: TraversalBag): Any? {
-        if(bag.fromAssignment) {
-            return localVariableMap[node.name.toString()]
+        val varName = node.name.toString();
+        val varClassPair = Pair(varName, bag.qualifiedNameOfEnclosingClass)
+
+        if(bag.fromAssignment && localVariableMap.containsKey(varName)) {
+            return localVariableMap[varName]
         }
+
+        if(bag.fromAssignment && constantMap.containsKey(varClassPair)){
+            return constantMap[varClassPair]
+        }
+
         return super.visitIdentifier(node, bag)
     }
 

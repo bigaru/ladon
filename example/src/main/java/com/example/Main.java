@@ -14,23 +14,29 @@ package com.example;
  */
 
 public class Main {
+    final static int NEGV = 33;
+
     public static void main(String[] args){
         System.out.println("Pika Example");
 
         Foo foo = new Foo();
-        foo.positiveInt = 43;
-        foo.anyNumber = -1;
 
         // TODO MethodInvocation
-        foo.anyNumber = Meow();
+        //foo.anyNumber = Meow();
 
         // DONE Ident
         int a = 0;
         // TODO what?
-        foo.positiveInt = null;
+        //foo.positiveInt = null;
+        //int NEGV = 3;
+        foo.positiveInt = NEGV;
     }
 
     static int Meow() { return -6;}
+}
+
+interface IBar{
+    int BAR_VALUE = -1;
 }
 
 class Bar{
