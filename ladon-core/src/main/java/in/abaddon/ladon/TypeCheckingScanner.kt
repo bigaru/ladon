@@ -88,7 +88,7 @@ class TypeCheckingScanner(
             verifyAssignment(pair, node, bag)
         }
 
-        if(lhs is JCTree.JCIdent){
+        if(lhs is JCTree.JCIdent && !localVariableMap.containsKey(lhs.name.toString())){
             val varName = lhs.name.toString()
             val pair = Pair(varName, bag.qualifiedNameOfEnclosingClass)
             verifyAssignment(pair, node, bag)

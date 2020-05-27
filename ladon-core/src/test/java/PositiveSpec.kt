@@ -381,6 +381,28 @@ public class Foo {
     }
 
     @Test
+    fun insideClassShadowing(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class Foo {
+    @Positive int positive = 4;
+    
+    public void bar(){
+        int positive = 0;
+        positive = -42;
+    }
+}
+""")
+
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile)
+
+        CompilationSubject.assertThat(compilation).succeeded()
+    }
+
+    @Test
     fun typecastedValue(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
@@ -511,4 +533,29 @@ public class Bar {
 
         CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
     }
+
+    @Ignore
+    @Test
+    fun doNotCheckConstantByShadowing(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class  Foo {
+    final static int NEGATIVE_NO = -42;
+
+    @Positive int positive = 4;
+    
+    public void bar(){
+        int NEGATIVE_NO = 42;
+        positive = NEGATIVE_NO;
+    }
+}
+""")
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile)
+
+        CompilationSubject.assertThat(compilation).succeeded()
+    }
+
 }
