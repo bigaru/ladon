@@ -221,8 +221,6 @@ public class Main {
         CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
     }
 
-    // TODO do it through node.type and pass CONSTANT
-    @Ignore
     @Test
     fun integerDoNotAcceptNull(){
         val fooFile = JavaFileObjects.forSourceString("com.example.Foo", """

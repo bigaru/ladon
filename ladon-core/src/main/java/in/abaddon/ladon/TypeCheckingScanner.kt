@@ -15,6 +15,8 @@ import java.lang.AssertionError
 import javax.annotation.processing.Messager
 import javax.tools.Diagnostic
 
+object NULL_LITERAL
+
 data class TraversalBag(
     val qualifiedNameOfEnclosingClass: String?,
     val fromAssignment: Boolean
@@ -129,6 +131,10 @@ class TypeCheckingScanner(
     }
 
     override fun visitLiteral(node: LiteralTree, bag: TraversalBag): Any? {
+        if(node is JCTree.JCLiteral && node.type.toString() == "<nulltype>"){
+            return NULL_LITERAL;
+        }
+
         return node.value
     }
 

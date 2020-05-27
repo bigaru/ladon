@@ -24,10 +24,7 @@ public class Main {
         // TODO MethodInvocation
         //foo.anyNumber = Meow();
 
-        // DONE Ident
-        int a = 0;
-        // TODO what?
-        //foo.positiveInt = null;
+        // DONE
         //int NEGV = 3;
         foo.positiveInt = NEGV;
     }

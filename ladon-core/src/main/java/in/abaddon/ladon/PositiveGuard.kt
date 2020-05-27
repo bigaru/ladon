@@ -12,6 +12,7 @@ object PositiveGuard: Guard {
             is Long -> expr > 0
             is Float -> expr > 0
             is Double -> expr > 0
+            is NULL_LITERAL -> false
             else -> throw AssertionError("should have handled all cases -> ${expr.javaClass.simpleName}")
         }
     }
