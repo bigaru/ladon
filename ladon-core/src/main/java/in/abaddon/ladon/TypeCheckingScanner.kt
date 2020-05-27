@@ -10,6 +10,7 @@ import com.sun.source.tree.MemberSelectTree
 import com.sun.source.tree.UnaryTree
 import com.sun.source.tree.VariableTree
 import com.sun.source.util.TreePathScanner
+import com.sun.tools.javac.code.Type
 import com.sun.tools.javac.tree.JCTree
 import java.lang.AssertionError
 import javax.annotation.processing.Messager
@@ -29,6 +30,7 @@ class TypeCheckingScanner(
 ): TreePathScanner<Any?, TraversalBag>(){
     //                        [variableName, value]
     val localVariableMap: MutableMap<String, Any> = mutableMapOf()
+    val superTypes: MutableSet<String> = mutableSetOf()
 
     protected fun warn(msg: String) = messager.printMessage(Diagnostic.Kind.WARNING, msg)
     protected fun error(msg: String) = messager.printMessage(Diagnostic.Kind.ERROR, msg)
@@ -114,6 +116,10 @@ class TypeCheckingScanner(
         val varName = node.name.toString();
         val varClassPair = Pair(varName, bag.qualifiedNameOfEnclosingClass)
 
+        if(bag.fromAssignment && node is JCTree.JCIdent){
+            warn(">>> ${node.type.baseType()}")
+        }
+
         if(bag.fromAssignment && localVariableMap.containsKey(varName)) {
             return localVariableMap[varName]
         }
@@ -125,8 +131,22 @@ class TypeCheckingScanner(
         return super.visitIdentifier(node, bag)
     }
 
+    private fun collectSuperType(type: Type){
+        if(type is Type.ClassType){
+            superTypes.add(type.toString())
+            collectSuperType(type.supertype_field)
+        }
+    }
+
     override fun visitClass(node: ClassTree, bag: TraversalBag): Any? {
         val classDecl = node as JCTree.JCClassDecl
+        val type = node.type
+
+        superTypes.clear()
+        if(type is Type.ClassType) {
+            collectSuperType(type.supertype_field)
+        }
+
         return super.visitClass(node, bag.copy(qualifiedNameOfEnclosingClass = classDecl.type.toString()))
     }
 
