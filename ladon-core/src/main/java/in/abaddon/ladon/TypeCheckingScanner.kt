@@ -30,7 +30,9 @@ class TypeCheckingScanner(
 ): TreePathScanner<Any?, TraversalBag>(){
     //                        [variableName, value]
     val localVariableMap: MutableMap<String, Any> = mutableMapOf()
-    val superTypes: MutableSet<String> = mutableSetOf()
+
+    // insertion order = [Derived, Base]
+    val superTypes: MutableList<String> = mutableListOf()
 
     protected fun warn(msg: String) = messager.printMessage(Diagnostic.Kind.WARNING, msg)
     protected fun error(msg: String) = messager.printMessage(Diagnostic.Kind.ERROR, msg)
@@ -116,16 +118,23 @@ class TypeCheckingScanner(
         val varName = node.name.toString();
         val varClassPair = Pair(varName, bag.qualifiedNameOfEnclosingClass)
 
-        if(bag.fromAssignment && node is JCTree.JCIdent){
-            warn(">>> ${node.type.baseType()}")
-        }
-
+        // local scope var
         if(bag.fromAssignment && localVariableMap.containsKey(varName)) {
             return localVariableMap[varName]
         }
 
+        // local class const
         if(bag.fromAssignment && constantMap.containsKey(varClassPair)){
             return constantMap[varClassPair]
+        }
+
+        // extended const
+        if(bag.fromAssignment){
+            val firstSuperType = superTypes.find{base -> constantMap.containsKey(Pair(varName, base))}
+
+            if(firstSuperType !=null) {
+                return constantMap[Pair(varName, firstSuperType)]
+            }
         }
 
         return super.visitIdentifier(node, bag)

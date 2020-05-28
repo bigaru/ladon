@@ -278,7 +278,7 @@ public class Main {
     }
 
     @Test
-    fun localVariableInitializedOnce(){
+    fun localScopeVarInitializedOnce(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
@@ -306,7 +306,7 @@ public class Main {
     }
 
     @Test
-    fun localVariableNewlyAssigned(){
+    fun localScopeVarMultipleAssigned(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
@@ -379,7 +379,7 @@ public class Foo {
     }
 
     @Test
-    fun insideClassShadowing(){
+    fun classVarShadowedByLocalScopeVar(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
@@ -510,7 +510,7 @@ public interface IMain {
     }
 
     @Test
-    fun localConstantVariable(){
+    fun localClassConst(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
@@ -531,7 +531,29 @@ public class  Foo {
         CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
     }
 
-    @Ignore
+    @Test
+    fun localClassConstShadowedByLocalScopeVar(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class  Foo {
+    final static int NEGATIVE_NO = -42;
+
+    @Positive int positive = 4;
+    
+    public void bar(){
+        int NEGATIVE_NO = 42;
+        positive = NEGATIVE_NO;
+    }
+}
+""")
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile)
+
+        CompilationSubject.assertThat(compilation).succeeded()
+    }
+
     @Test
     fun inheritedConstantVariableFromBase(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
@@ -555,6 +577,86 @@ public class Bar {
             .compile(fooFile, mainFile)
 
         CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
+    }
+
+    @Test
+    fun inheritedConstantVariableFromBaseBase(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class Foo extends Bar {
+    @Positive int positive = 4;
+    
+    public void bar(){
+        positive = NEGATIVE_NO;
+    }
+}
+""")
+        val barFile = JavaFileObjects.forSourceString("Bar", """
+public class Bar extends AbstractBar {}
+""")
+        val abstractBarFile = JavaFileObjects.forSourceString("AbstractBar", """
+public class AbstractBar {
+    final static int NEGATIVE_NO = -42;
+}
+""")
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile, barFile, abstractBarFile)
+
+        CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
+    }
+
+    @Test
+    fun inheritedConstantShadowedByLocalScopeVar(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class Foo extends Bar {
+    @Positive int positive = 4;
+    
+    public void bar(){
+        int NEGATIVE_NO = 8;
+        positive = NEGATIVE_NO;
+    }
+}
+""")
+        val mainFile = JavaFileObjects.forSourceString("Bar", """
+public class Bar {
+    final static int NEGATIVE_NO = -42;
+}
+""")
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile, mainFile)
+
+        CompilationSubject.assertThat(compilation).succeeded()
+    }
+
+    @Test
+    fun inheritedConstantShadowedByLocalClassConst(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class Foo extends Bar {
+    final static int NEGATIVE_NO = 8;
+    @Positive int positive = 4;
+    
+    public void bar(){
+        positive = NEGATIVE_NO;
+    }
+}
+""")
+        val mainFile = JavaFileObjects.forSourceString("Bar", """
+public class Bar {
+    final static int NEGATIVE_NO = -42;
+}
+""")
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile, mainFile)
+
+        CompilationSubject.assertThat(compilation).succeeded()
     }
 
     @Ignore
@@ -581,29 +683,6 @@ public interface Bar {
             .compile(fooFile, mainFile)
 
         CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
-    }
-
-    @Test
-    fun takeShadowedValueInsteadOfConstant(){
-        val fooFile = JavaFileObjects.forSourceString("Foo", """
-import in.abaddon.ladon.Positive;
-
-public class  Foo {
-    final static int NEGATIVE_NO = -42;
-
-    @Positive int positive = 4;
-    
-    public void bar(){
-        int NEGATIVE_NO = 42;
-        positive = NEGATIVE_NO;
-    }
-}
-""")
-        val compilation = Compiler.javac()
-            .withProcessors(LadonProcessor())
-            .compile(fooFile)
-
-        CompilationSubject.assertThat(compilation).succeeded()
     }
 
 }
