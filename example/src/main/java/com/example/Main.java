@@ -13,7 +13,7 @@ package com.example;
  * JCFieldAccess    = JCUnary
  */
 
-public class Main extends Bar{
+public class Main implements IBar, IFoo{
     final static int NEGV = 33;
 
     public static void main(String[] args){
@@ -24,20 +24,16 @@ public class Main extends Bar{
         // TODO MethodInvocation
         //foo.anyNumber = Meow();
 
-        // DONE
-        //int NEGV = 3;
-        foo.positiveInt = 2;
+        foo.positiveInt = BAR_VALUE;
     }
 
     static int Meow() { return -6;}
 }
 
-interface IBar{
-    int BAR_VALUE = -1;
+interface IFoo {
+    int BAR_VALUE = 2;
 }
 
-class Base{}
+interface IBar {
 
-class Bar extends Base{
-    final static int BAR_VALUE = -1;
 }

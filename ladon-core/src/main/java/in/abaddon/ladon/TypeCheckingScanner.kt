@@ -33,6 +33,7 @@ class TypeCheckingScanner(
 
     // insertion order = [Derived, Base]
     val superTypes: MutableList<String> = mutableListOf()
+    val interfaceTypes: MutableList<Type> = mutableListOf()
 
     protected fun warn(msg: String) = messager.printMessage(Diagnostic.Kind.WARNING, msg)
     protected fun error(msg: String) = messager.printMessage(Diagnostic.Kind.ERROR, msg)
@@ -114,26 +115,43 @@ class TypeCheckingScanner(
         return super.visitMemberSelect(node, bag)
     }
 
+    private fun findFirstInterfaceType(types: List<Type>, matches:(String) -> Boolean): String?{
+        if(types.isEmpty()) return null
+
+        val maybeFirst = types.find{ matches(it.toString()) }
+        if (maybeFirst != null) return maybeFirst.toString()
+
+        val subTypes = types.filterIsInstance<Type.ClassType>()
+                            .flatMap { it.interfaces_field }
+
+        return findFirstInterfaceType(subTypes, matches)
+    }
+
     override fun visitIdentifier(node: IdentifierTree, bag: TraversalBag): Any? {
         val varName = node.name.toString();
         val varClassPair = Pair(varName, bag.qualifiedNameOfEnclosingClass)
 
-        // local scope var
-        if(bag.fromAssignment && localVariableMap.containsKey(varName)) {
-            return localVariableMap[varName]
-        }
-
-        // local class const
-        if(bag.fromAssignment && constantMap.containsKey(varClassPair)){
-            return constantMap[varClassPair]
-        }
-
-        // extended const
         if(bag.fromAssignment){
-            val firstSuperType = superTypes.find{base -> constantMap.containsKey(Pair(varName, base))}
+            // local scope var
+            if(localVariableMap.containsKey(varName)) {
+                return localVariableMap[varName]
+            }
 
+            // local class const
+            if(constantMap.containsKey(varClassPair)){
+                return constantMap[varClassPair]
+            }
+
+            // extended const
+            val firstSuperType = superTypes.find{base -> constantMap.containsKey(Pair(varName, base))}
             if(firstSuperType !=null) {
                 return constantMap[Pair(varName, firstSuperType)]
+            }
+
+            // implemented const
+            val firstInterface = findFirstInterfaceType(interfaceTypes){base -> constantMap.containsKey(Pair(varName, base))}
+            if(firstInterface !=null) {
+                return constantMap[Pair(varName, firstInterface)]
             }
         }
 
@@ -147,13 +165,20 @@ class TypeCheckingScanner(
         }
     }
 
+    private fun collectInterfaces(types: List<Type>){
+        interfaceTypes.addAll(types)
+    }
+
     override fun visitClass(node: ClassTree, bag: TraversalBag): Any? {
         val classDecl = node as JCTree.JCClassDecl
         val type = node.type
 
         superTypes.clear()
+        interfaceTypes.clear()
+
         if(type is Type.ClassType) {
             collectSuperType(type.supertype_field)
+            collectInterfaces(type.interfaces_field)
         }
 
         return super.visitClass(node, bag.copy(qualifiedNameOfEnclosingClass = classDecl.type.toString()))
