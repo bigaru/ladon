@@ -3,7 +3,6 @@ package `in`.abaddon.ladon
 import com.sun.source.tree.AssignmentTree
 import com.sun.source.tree.BlockTree
 import com.sun.source.tree.ClassTree
-import com.sun.source.tree.ExpressionTree
 import com.sun.source.tree.IdentifierTree
 import com.sun.source.tree.LiteralTree
 import com.sun.source.tree.MemberSelectTree
@@ -14,6 +13,7 @@ import com.sun.tools.javac.code.Type
 import com.sun.tools.javac.tree.JCTree
 import java.lang.AssertionError
 import javax.annotation.processing.Messager
+import javax.lang.model.element.Modifier
 import javax.tools.Diagnostic
 
 object NULL_LITERAL
@@ -29,7 +29,8 @@ class TypeCheckingScanner(
     val constantMap: MutableMap<Pair<String, String>, Any>
 ): TreePathScanner<Any?, TraversalBag>(){
     //                        [variableName, value]
-    val localVariableMap: MutableMap<String, Any> = mutableMapOf()
+    val localConstantMap: MutableMap<String, Any> = mutableMapOf()
+    val localVariableSet: MutableSet<String> = mutableSetOf()
 
     // insertion order = [Derived, Base]
     val superTypes: MutableList<String> = mutableListOf()
@@ -39,27 +40,23 @@ class TypeCheckingScanner(
     protected fun error(msg: String) = messager.printMessage(Diagnostic.Kind.ERROR, msg)
 
     override fun visitBlock(node: BlockTree, bag: TraversalBag): Any? {
-        localVariableMap.clear()
+        localConstantMap.clear()
+        localVariableSet.clear()
         return super.visitBlock(node, bag)
     }
 
     override fun visitVariable(node: VariableTree, bag: TraversalBag): Any? {
+        val isFinal = node.modifiers.flags.any { it == Modifier.FINAL }
         val rhsValue = scan(node.initializer, bag)
 
-        if(rhsValue != null) {
-            localVariableMap.put(node.name.toString(), rhsValue)
+        val varName = node.name.toString()
+        localVariableSet.add(varName)
+
+        if(isFinal && rhsValue != null) {
+            localConstantMap.put(varName, rhsValue)
         }
 
         return super.visitVariable(node, bag)
-    }
-
-    private fun collectLocalVariable(identNode: IdentifierTree, rhsNode: ExpressionTree, bag: TraversalBag){
-        val varName = identNode.name.toString()
-        val rhsValue = scan(rhsNode, bag)
-
-        if(localVariableMap.containsKey(varName) && rhsValue != null){
-            localVariableMap.put(varName, rhsValue)
-        }
     }
 
     private fun verifyAssignment(varClassPair: Pair<String, String?>, node: AssignmentTree, bag: TraversalBag){
@@ -83,10 +80,6 @@ class TypeCheckingScanner(
         warn("Assignment lhs $lhs ${lhs.javaClass.simpleName}")
         warn("Assignment rhs $rhs ${rhs.javaClass.simpleName}")
 
-        if(lhs is JCTree.JCIdent){
-            collectLocalVariable(lhs, rhs, bag)
-        }
-
         if(lhs is JCTree.JCFieldAccess){
             val className = lhs.expression.type.toString()
             val varName = lhs.identifier.toString()
@@ -95,7 +88,7 @@ class TypeCheckingScanner(
             verifyAssignment(pair, node, bag)
         }
 
-        if(lhs is JCTree.JCIdent && !localVariableMap.containsKey(lhs.name.toString())){
+        if(lhs is JCTree.JCIdent && !localVariableSet.contains(lhs.name.toString())){
             val varName = lhs.name.toString()
             val pair = Pair(varName, bag.qualifiedNameOfEnclosingClass)
             verifyAssignment(pair, node, bag)
@@ -132,10 +125,13 @@ class TypeCheckingScanner(
         val varClassPair = Pair(varName, bag.qualifiedNameOfEnclosingClass)
 
         if(bag.fromAssignment){
-            // local scope var
-            if(localVariableMap.containsKey(varName)) {
-                return localVariableMap[varName]
+            // local scope const
+            if(localConstantMap.containsKey(varName)) {
+                return localConstantMap[varName]
             }
+
+            // local scope var
+            if(localVariableSet.contains(varName)) return null
 
             // local class const
             if(constantMap.containsKey(varClassPair)){

@@ -278,7 +278,7 @@ public class Main {
     }
 
     @Test
-    fun localScopeVarInitializedOnce(){
+    fun localScopeConstant(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
@@ -290,7 +290,7 @@ public class Foo {
         val mainFile = JavaFileObjects.forSourceString("Main", """
 public class Main {
     public static void main(String[] args){
-        int bar = -42;
+        final int bar = -42;
     
         Foo foo = new Foo();
         foo.positive = bar;
@@ -306,7 +306,7 @@ public class Main {
     }
 
     @Test
-    fun localScopeVarMultipleAssigned(){
+    fun localScopeVarDynamicValue(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
 
@@ -318,13 +318,15 @@ public class Foo {
         val mainFile = JavaFileObjects.forSourceString("Main", """
 public class Main {
     public static void main(String[] args){
-        int bar = 42;
-        bar = -42;
-        bar = 42;
-        bar = -42;
+        int bar = -42;
+        bar = getRandom();
     
         Foo foo = new Foo();
         foo.positive = bar;
+    }
+    
+    static int getRandom(){
+        return 42;
     }
 }
 """)
@@ -333,7 +335,7 @@ public class Main {
                                   .withProcessors(LadonProcessor())
                                   .compile(fooFile, mainFile)
 
-        CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
+        CompilationSubject.assertThat(compilation).succeeded()
     }
 
     @Test
@@ -555,6 +557,29 @@ public class  Foo {
     }
 
     @Test
+    fun localClassConstShadowedByLocalScopeConst(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class  Foo {
+    final static int NEGATIVE_NO = -42;
+
+    @Positive int positive = 4;
+    
+    public void bar(){
+        final int NEGATIVE_NO = 42;
+        positive = NEGATIVE_NO;
+    }
+}
+""")
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile)
+
+        CompilationSubject.assertThat(compilation).succeeded()
+    }
+
+    @Test
     fun inheritedConstVarFromBase(){
         val fooFile = JavaFileObjects.forSourceString("Foo", """
 import in.abaddon.ladon.Positive;
@@ -617,6 +642,32 @@ public class Foo extends Bar {
     
     public void bar(){
         int NEGATIVE_NO = 8;
+        positive = NEGATIVE_NO;
+    }
+}
+""")
+        val mainFile = JavaFileObjects.forSourceString("Bar", """
+public class Bar {
+    final static int NEGATIVE_NO = -42;
+}
+""")
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile, mainFile)
+
+        CompilationSubject.assertThat(compilation).succeeded()
+    }
+
+    @Test
+    fun inheritedConstVarShadowedByLocalScopeConst(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class Foo extends Bar {
+    @Positive int positive = 4;
+    
+    public void bar(){
+        final int NEGATIVE_NO = 8;
         positive = NEGATIVE_NO;
     }
 }
@@ -752,6 +803,32 @@ public class Foo implements Bar {
     
     public void bar(){
         int NEGATIVE_NO = 8;
+        positive = NEGATIVE_NO;
+    }
+}
+""")
+        val mainFile = JavaFileObjects.forSourceString("Bar", """
+public interface Bar {
+    int NEGATIVE_NO = -42;
+}
+""")
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile, mainFile)
+
+        CompilationSubject.assertThat(compilation).succeeded()
+    }
+
+    @Test
+    fun implementedConstVarShadowedByLocalScopeConst(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class Foo implements Bar {
+    @Positive int positive = 4;
+    
+    public void bar(){
+        final int NEGATIVE_NO = 8;
         positive = NEGATIVE_NO;
     }
 }

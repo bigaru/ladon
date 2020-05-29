@@ -24,7 +24,9 @@ public class Main implements IBar, IFoo{
         // TODO MethodInvocation
         //foo.anyNumber = Meow();
 
-        foo.positiveInt = BAR_VALUE;
+        int local = -4;
+        final int co = -32;
+        foo.positiveInt = local;
     }
 
     static int Meow() { return -6;}
