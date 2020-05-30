@@ -9,6 +9,7 @@ import javax.annotation.processing.Messager
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.RoundEnvironment
 import javax.annotation.processing.SupportedAnnotationTypes
+import javax.annotation.processing.SupportedOptions
 import javax.annotation.processing.SupportedSourceVersion
 import javax.lang.model.SourceVersion
 import javax.lang.model.element.Modifier
@@ -18,7 +19,12 @@ import javax.tools.Diagnostic
 
 @SupportedAnnotationTypes("in.abaddon.ladon.*")
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
+@SupportedOptions(LadonProcessor.OPTION_STRICT)
 class LadonProcessor : AbstractProcessor(){
+    companion object{
+        const val OPTION_STRICT = "strict"
+    }
+
     val constantMap = mutableMapOf<Pair<String, String>, Any>()
     val elements: MutableMap<Pair<String, String>, Guard> = mutableMapOf()
     private lateinit var messager: Messager
@@ -51,6 +57,9 @@ class LadonProcessor : AbstractProcessor(){
             val pair = Pair(it.simpleName.toString(), classElement.qualifiedName.toString())
             elements.put(pair, PositiveGuard)
         }
+
+        // TODO if set, use strict handling!
+        warn(">arg  ${processingEnv.getOptions().get(OPTION_STRICT)}")
 
         return true
     }

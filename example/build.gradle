@@ -8,6 +8,10 @@ repositories {
     mavenCentral()
 }
 
+compileJava {
+    // options.compilerArgs << "-Astrict=true"
+}
+
 dependencies {
     compileOnly project(':ladon-core')
     annotationProcessor project(':ladon-core')
