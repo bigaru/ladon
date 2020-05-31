@@ -12,6 +12,8 @@ import javax.annotation.processing.SupportedAnnotationTypes
 import javax.annotation.processing.SupportedOptions
 import javax.annotation.processing.SupportedSourceVersion
 import javax.lang.model.SourceVersion
+import javax.lang.model.element.AnnotationMirror
+import javax.lang.model.element.ExecutableElement
 import javax.lang.model.element.Modifier
 import javax.lang.model.element.TypeElement
 import javax.lang.model.element.VariableElement
@@ -26,7 +28,10 @@ class LadonProcessor : AbstractProcessor(){
     }
 
     val constantMap = mutableMapOf<Pair<String, String>, Any>()
-    val elements: MutableMap<Pair<String, String>, Guard> = mutableMapOf()
+    val memberVarElements: MutableMap<Pair<String, String>, Guard> = mutableMapOf()
+
+    //                             [(class, method, [type]), [predicate]]
+    val methodElements: MutableMap<Triple<String, String, List<String>>, List<Guard?>> = mutableMapOf()
     private lateinit var messager: Messager
 
     override @Synchronized fun init(processingEnv: ProcessingEnvironment) {
@@ -52,11 +57,29 @@ class LadonProcessor : AbstractProcessor(){
     override fun process(annotations: MutableSet<out TypeElement>, roundEnv: RoundEnvironment): Boolean {
         collectConstants(roundEnv)
 
-        roundEnv.getElementsAnnotatedWith(Positive::class.java).forEach {
-            val classElement = it.enclosingElement as TypeElement
-            val pair = Pair(it.simpleName.toString(), classElement.qualifiedName.toString())
-            elements.put(pair, PositiveGuard)
-        }
+        roundEnv
+            .getElementsAnnotatedWith(Positive::class.java)
+            .filter { it.enclosingElement is TypeElement }
+            .forEach {
+                val classElement = it.enclosingElement as TypeElement
+                val varClassName = Pair(it.simpleName.toString(), classElement.qualifiedName.toString())
+                memberVarElements.put(varClassName, PositiveGuard)
+            }
+
+        roundEnv
+            .rootElements.flatMap { it.enclosedElements }
+            .filterIsInstance<ExecutableElement>()
+            .forEach {
+                val classElement = it.enclosingElement as TypeElement
+                val methodName = it.simpleName.toString()
+                val typeList = it.parameters.map{ it.asType().toString() }
+
+                val methodSignature = Triple(classElement.qualifiedName.toString(), methodName, typeList)
+                val guards = it.parameters.map{ mapAnnotationsToGuard(it.annotationMirrors) }
+
+                warn("___ $methodSignature")
+                methodElements.put(methodSignature, guards)
+            }
 
         // TODO if set, use strict handling!
         warn(">arg  ${processingEnv.getOptions().get(OPTION_STRICT)}")
@@ -64,11 +87,24 @@ class LadonProcessor : AbstractProcessor(){
         return true
     }
 
+    private fun mapAnnotationsToGuard(annotations: List<AnnotationMirror>): Guard? {
+        // TODO enable combine Predicates
+        if(annotations.isEmpty()) return null
+
+        return annotations.map {
+            when (it.annotationType.toString()) {
+                Positive::class.qualifiedName -> PositiveGuard
+                else -> null
+            }
+        }
+        .first { it is Guard }
+    }
+
     private fun warn(msg: String) = messager.printMessage(Diagnostic.Kind.WARNING, msg)
     private fun error(msg: String) = messager.printMessage(Diagnostic.Kind.ERROR, msg)
 
     inner class LadonTaskListener(): TaskListener{
-        val typeCheckingScanner = TypeCheckingScanner(elements, messager, constantMap)
+        val typeCheckingScanner = TypeCheckingScanner(memberVarElements, methodElements, messager, constantMap)
 
         override fun finished(event: TaskEvent) {
             if(event.kind == TaskEvent.Kind.ANALYZE){

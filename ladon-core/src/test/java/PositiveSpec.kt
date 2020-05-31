@@ -871,4 +871,70 @@ public interface Bar {
         CompilationSubject.assertThat(compilation).succeeded()
     }
 
+    @Test
+    fun internalMethodInvocSingleParam(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class Foo {
+    
+    public void bar(@Positive int positive){}
+    
+    public void barClient(){
+        bar(-42);
+    }
+}
+""")
+
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile)
+
+        CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
+    }
+
+    @Test
+    fun internalMethodInvocMultiParam(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class Foo {
+    
+    public void bar(String str, @Positive int positive, Object obj){}
+    
+    public void barClient(){
+        bar("", -42, null);
+    }
+}
+""")
+
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile)
+
+        CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
+    }
+
+    @Test
+    fun internalMethodInvocOverload(){
+        val fooFile = JavaFileObjects.forSourceString("Foo", """
+import in.abaddon.ladon.Positive;
+
+public class Foo {
+
+    public void bar(String str, @Positive int positive, Object obj){}
+    public void bar(String str){}
+    
+    public void barClient(){
+        bar("", -42, null);
+    }
+}
+""")
+
+        val compilation = Compiler.javac()
+            .withProcessors(LadonProcessor())
+            .compile(fooFile)
+
+        CompilationSubject.assertThat(compilation).hadErrorContaining("must be positive")
+    }
 }

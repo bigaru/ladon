@@ -6,6 +6,7 @@ import com.sun.source.tree.ClassTree
 import com.sun.source.tree.IdentifierTree
 import com.sun.source.tree.LiteralTree
 import com.sun.source.tree.MemberSelectTree
+import com.sun.source.tree.MethodInvocationTree
 import com.sun.source.tree.UnaryTree
 import com.sun.source.tree.VariableTree
 import com.sun.source.util.TreePathScanner
@@ -24,7 +25,8 @@ data class TraversalBag(
 )
 
 class TypeCheckingScanner(
-    val elements: MutableMap<Pair<String, String>, Guard>,
+    val memberVarElements: MutableMap<Pair<String, String>, Guard>,
+    val methodElements: MutableMap<Triple<String, String, List<String>>, List<Guard?>>,
     val messager: Messager,
     val constantMap: MutableMap<Pair<String, String>, Any>
 ): TreePathScanner<Any?, TraversalBag>(){
@@ -45,6 +47,34 @@ class TypeCheckingScanner(
         return super.visitBlock(node, bag)
     }
 
+    override fun visitMethodInvocation(node: MethodInvocationTree, bag: TraversalBag): Any? {
+        val methodSelect = node.methodSelect
+        if(methodSelect is IdentifierTree){
+            val methodName = methodSelect.name.toString()
+            val typeList = node.arguments.filterIsInstance<JCTree.JCExpression>().map { it.type.toString() }
+            val methodSignature = Triple(bag.qualifiedNameOfEnclosingClass!!, methodName, typeList)
+
+
+            warn(">>>> ${methodSignature}}")
+
+            if(methodElements.containsKey(methodSignature)){
+                val guards = methodElements[methodSignature]!!
+
+                warn(">>>> INSIDE")
+
+                node.arguments.forEachIndexed { idx, expr -> run {
+                    val resolvedValue = scan(expr, bag)
+                    val predicate = guards[idx]
+                    if(resolvedValue != null && predicate != null && !predicate.isValid(resolvedValue)){
+                        error("$node ${predicate.msg}")
+                    }
+                } }
+            }
+        }
+
+        return super.visitMethodInvocation(node, bag)
+    }
+
     override fun visitVariable(node: VariableTree, bag: TraversalBag): Any? {
         val isFinal = node.modifiers.flags.any { it == Modifier.FINAL }
         val rhsValue = scan(node.initializer, bag)
@@ -61,7 +91,7 @@ class TypeCheckingScanner(
 
     private fun verifyAssignment(varClassPair: Pair<String, String?>, node: AssignmentTree, bag: TraversalBag){
         val rhsValue = scan(node.expression, bag.copy(fromAssignment = true))
-        val predicate = elements[varClassPair]
+        val predicate = memberVarElements[varClassPair]
 
         if(predicate == null || rhsValue == null) return
 
