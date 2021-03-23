@@ -55,7 +55,8 @@ class TypeCheckingScanner(
             val methodSignature = Triple(bag.qualifiedNameOfEnclosingClass!!, methodName, typeList)
 
 
-            warn(">>>> ${methodSignature}}")
+            val n = node as JCTree.JCMethodInvocation
+            warn(">>>> ${node.meth.javaClass.simpleName}")
 
             if(methodElements.containsKey(methodSignature)){
                 val guards = methodElements[methodSignature]!!

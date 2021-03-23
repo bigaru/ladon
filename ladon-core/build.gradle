@@ -15,6 +15,7 @@ repositories {
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
     compileOnly files(Jvm.current().toolsJar)
+    compile group: 'org.eclipse.jdt', name: 'core', version: '3.3.0-v_771'
 
     testImplementation "junit:junit:4.12"
     testImplementation files(Jvm.current().toolsJar)

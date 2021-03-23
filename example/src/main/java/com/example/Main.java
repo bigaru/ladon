@@ -16,10 +16,25 @@ public class Main {
         int local = -4;
         final int co = -32;
         foo.positiveInt = local;
-        fooify("", -23);
+        fooify("", new Integer(3));
+
+        fooify(4.0, new Integer(3));
+        fooify(new Double(4.0), 3);
+        fooify(4.0, 3);
     }
 
+    // TODO Method overload resolution
+    //  1. qualified name
+    //  2. type length
+    //  3. type matches
+    //  4. type with if a subtype of b
     static void fooify(String str, @Positive int positiveNo){ }
+    static void fooify(String str, @Positive Object positiveNo){ }
+    static void fooify(String str, @Positive Integer positiveNo){ }
+
+    static void fooify(Double floati, @Positive int positiveNo){ }
+    static void fooify(double floati, @Positive Integer positiveNo){ }
+
     static void fooify(@Positive int positiveNo){ }
     static void fooify( Integer positiveNo){ }
 
